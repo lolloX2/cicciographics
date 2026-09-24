@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>cicciogamer89tcg Cup — Templates Instagram</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow+Condensed:wght@400;500;600;700;800&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+  <script type="text/babel" src="design-canvas.jsx"></script>
+  <script type="text/babel" src="tweaks-panel.jsx"></script>
+  <script type="text/babel" src="templates/Shared.jsx"></script>
+  <script type="text/babel" src="templates/DecklistTemplate.jsx"></script>
+  <script type="text/babel" src="templates/BreakdownTemplate.jsx"></script>
+  <script type="text/babel" src="templates/CoverTemplate.jsx"></script>
+  <script type="text/babel" src="templates/RosterTemplate.jsx"></script>
+  <script type="text/babel" src="templates/PlayerResultTemplate.jsx"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body, #root { width: 100%; height: 100%; }
+    body { background: #1a1a1a; overflow: hidden; }
+  </style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel">
+const {
+  useTweaks, TweaksPanel, TweakSection,
+  TweakText, TweakSlider,
+} = window;
+const { DesignCanvas, DCSection, DCArtboard } = window;
+const { DecklistTemplate, BreakdownTemplate, CoverTemplate, RosterTemplate, PlayerResultTemplate } = window;
+
+const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
+  "tournamentName": "",
+  "edition": "",
+  "eventDate": "",
+  "cupNumber": "",
+  "playerCount": 32,
+  "winnerName": "",
+  "leaderName": "",
+  "handle": ""
+}/*EDITMODE-END*/;
+
+function App() {
+  const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
+
+  return (
+    <>
+      <DesignCanvas>
+        <DCSection id="s1" title="cicciogamer89tcg Cup — Templates Instagram 1080×1080">
+          <DCArtboard id="cover"     label="Copertina"      width={1080} height={1080}>
+            <CoverTemplate tweaks={t} images={{}}/>
+          </DCArtboard>
+          <DCArtboard id="decklist"  label="Decklist"       width={1080} height={1080}>
+            <DecklistTemplate tweaks={t} images={{}}/>
+          </DCArtboard>
+          <DCArtboard id="breakdown" label="Mazzi Giocati"  width={1080} height={1080}>
+            <BreakdownTemplate tweaks={t} images={{}} data={null}/>
+          </DCArtboard>
+        </DCSection>
+        <DCSection id="s2" title="Regional — Roster e Risultati">
+          <DCArtboard id="roster" label="Roster" width={1080} height={1080}>
+            <RosterTemplate tweaks={t}/>
+          </DCArtboard>
+          <DCArtboard id="player" label="Risultato giocatore" width={1080} height={1080}>
+            <PlayerResultTemplate tweaks={t} player={{}}/>
+          </DCArtboard>
+        </DCSection>
+      </DesignCanvas>
+
+      <TweaksPanel>
+        <TweakSection label="Torneo"/>
+        <TweakText label="Nome torneo"  value={t.tournamentName} onChange={v => setTweak('tournamentName', v)}/>
+        <TweakText label="Edizione"     value={t.edition}        onChange={v => setTweak('edition', v)}/>
+        <TweakText label="Data evento"  value={t.eventDate}      onChange={v => setTweak('eventDate', v)}/>
+        <TweakText label="N° cup"       value={t.cupNumber}      onChange={v => setTweak('cupNumber', v)}/>
+        <TweakSlider label="Giocatori"  value={t.playerCount}
+                     min={4} max={256} step={1} unit=""
+                     onChange={v => setTweak('playerCount', v)}/>
+        <TweakText label="Handle"       value={t.handle}         onChange={v => setTweak('handle', v)}/>
+        <TweakSection label="Decklist"/>
+        <TweakText label="1° Classificato" value={t.winnerName}  onChange={v => setTweak('winnerName', v)}/>
+        <TweakText label="Leader"          value={t.leaderName}  onChange={v => setTweak('leaderName', v)}/>
+      </TweaksPanel>
+    </>
+  );
+}
+
+window.pokemonReady.then(() => ReactDOM.createRoot(document.getElementById('root')).render(<App/>));
+</script>
+</body>
+</html>

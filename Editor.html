@@ -1,0 +1,874 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Editor — cicciogamer89tcg Cup</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow+Condensed:wght@400;500;600;700&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/html-to-image@1.11.11/dist/html-to-image.js"></script>
+  <script type="text/babel" src="templates/Shared.jsx"></script>
+  <script type="text/babel" src="templates/DecklistTemplate.jsx"></script>
+  <script type="text/babel" src="templates/BreakdownTemplate.jsx"></script>
+  <script type="text/babel" src="templates/CoverTemplate.jsx"></script>
+  <script type="text/babel" src="templates/RosterTemplate.jsx"></script>
+  <script type="text/babel" src="templates/PlayerResultTemplate.jsx"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body, #root { width: 100%; height: 100%; overflow: hidden; }
+    body { background: #0D0D0D; color: #fff; }
+    ::-webkit-scrollbar { width: 5px; }
+    ::-webkit-scrollbar-track { background: #0D0D0D; }
+    ::-webkit-scrollbar-thumb { background: rgba(255,107,0,0.35); border-radius: 3px; }
+    input[type=number]::-webkit-inner-spin-button { opacity: 0.4; }
+    input::placeholder { color: rgba(255,255,255,0.18); }
+  </style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useRef } = React;
+
+const E = {
+  bg:'#0D0D0D', panel:'#111', card:'#191919',
+  border:'rgba(255,107,0,0.25)', orange:'#FF6B00', gold:'#E8960A',
+  red:'#C92B0C', white:'#fff', dim:'rgba(255,255,255,0.45)',
+  dimmer:'rgba(255,255,255,0.25)', input:'#161616',
+};
+
+const TABS_T = [
+  { id:'cover',     label:'Copertina' },
+  { id:'decklist',  label:'Decklist'  },
+  { id:'breakdown', label:'Breakdown' },
+];
+const TABS_R = [
+  { id:'roster',    label:'Roster'    },
+  { id:'player',    label:'Risultati' },
+];
+const CATS = ['Junior','Senior','Master'];
+const newResult = () => ({name:"Nome Cognome",category:"Master",game:"TCG",result:"TOP 8",record:"",photo:null,pokemon:[]});
+
+function GameSelect({ value, onChange }) {
+  return (
+    <div style={{ display:'flex', gap:3 }}>
+      {['TCG','VGC'].map(g => (
+        <button key={g} onClick={()=>onChange(g)}
+          style={{ padding:'5px 6px', borderRadius:3, cursor:'pointer',
+                   background: (value||'TCG')===g ? '#fff' : 'transparent',
+                   border:`1px solid ${(value||'TCG')===g ? '#fff' : 'rgba(255,107,0,0.25)'}`,
+                   color: (value||'TCG')===g ? '#000' : 'rgba(255,255,255,0.45)',
+                   fontFamily:"'Barlow Condensed',sans-serif", fontSize:12, fontWeight:700 }}>{g}</button>
+      ))}
+    </div>
+  );
+}
+
+const DEFAULT_BRK = [
+  {name:"Leader A",value:9,mainPkmn:null,secondaryPkmn:null},
+  {name:"Leader B",value:8,mainPkmn:null,secondaryPkmn:null},
+  {name:"Leader C",value:6,mainPkmn:null,secondaryPkmn:null},
+  {name:"Leader D",value:5,mainPkmn:null,secondaryPkmn:null},
+  {name:"Leader E",value:4,mainPkmn:null,secondaryPkmn:null},
+  {name:"Leader F",value:3,mainPkmn:null,secondaryPkmn:null},
+  {name:"Leader G",value:2,mainPkmn:null,secondaryPkmn:null},
+  {name:"Leader H",value:2,mainPkmn:null,secondaryPkmn:null},
+  {name:"Leader I",value:1,mainPkmn:null,secondaryPkmn:null},
+  {name:"Leader J",value:1,mainPkmn:null,secondaryPkmn:null},
+  {name:"Leader K",value:1,mainPkmn:null,secondaryPkmn:null},
+];
+
+
+
+/* ─── ImageUploadSlot ───────────────────────────────────────── */
+function ImageUploadSlot({ value, onChange, width=46, height=64, label="immagine", radius=4, fullWidth=false }) {
+  const ref = useRef(null);
+  const [drag, setDrag] = useState(false);
+  const handle = f => { if (f?.type.startsWith('image/')) onChange(URL.createObjectURL(f)); };
+  return (
+    <div
+      onClick={() => ref.current?.click()}
+      onDragOver={e => { e.preventDefault(); setDrag(true); }}
+      onDragLeave={() => setDrag(false)}
+      onDrop={e => { e.preventDefault(); setDrag(false); handle(e.dataTransfer.files[0]); }}
+      style={{
+        width: fullWidth ? '100%' : width, height, borderRadius: radius,
+        overflow:'hidden',
+        border:`1.5px ${drag?'solid':'dashed'} ${drag?E.orange:E.border}`,
+        background: drag ? 'rgba(255,107,0,0.07)' : E.input,
+        cursor:'pointer', flexShrink:0,
+        display:'flex', alignItems:'center', justifyContent:'center',
+        transition:'border-color .15s', position:'relative',
+      }}
+    >
+      {value ? (
+        <>
+          <img src={value} style={{ width:'100%', height:'100%', objectFit:'cover' }} alt=""/>
+          <button onClick={ev => { ev.stopPropagation(); onChange(null); }}
+                  style={{ position:'absolute', top:4, right:4, width:18, height:18,
+                           borderRadius:'50%', background:'rgba(0,0,0,0.88)', border:'none',
+                           color:'#fff', fontSize:12, cursor:'pointer',
+                           display:'flex', alignItems:'center', justifyContent:'center' }}>×</button>
+        </>
+      ) : (
+        <div style={{ display:'flex', flexDirection:'column', alignItems:'center',
+                      gap:5, color:E.dim, padding:8, textAlign:'center' }}>
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+            <circle cx="10" cy="10" r="8.5" stroke="currentColor" strokeWidth="1.3"/>
+            <line x1="10" y1="5.5" x2="10" y2="14.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
+            <line x1="5.5" y1="10" x2="14.5" y2="10" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
+          </svg>
+          {fullWidth && <span style={{ fontFamily:"'Barlow Condensed',sans-serif",
+                                       fontSize:13, letterSpacing:1, lineHeight:1.4 }}>{label}</span>}
+        </div>
+      )}
+      <input ref={ref} type="file" accept="image/*" style={{ display:'none' }}
+             onChange={e => handle(e.target.files?.[0])}/>
+    </div>
+  );
+}
+
+/* ─── form helpers ──────────────────────────────────────────── */
+const Lbl = ({c}) => (
+  <div style={{ fontFamily:"'Barlow Condensed',sans-serif", fontSize:11, letterSpacing:1.8,
+                textTransform:'uppercase', color:E.dimmer, marginBottom:3 }}>{c}</div>
+);
+
+function Inp({ label, value, onChange, type='text', min, max }) {
+  return (
+    <div>
+      {label && <Lbl c={label}/>}
+      <input type={type} value={value} min={min} max={max}
+        onChange={e => onChange(type==='number' ? Number(e.target.value) : e.target.value)}
+        style={{ width:'100%', background:E.input, border:`1px solid ${E.border}`,
+                 borderRadius:4, color:E.white, fontFamily:"'Barlow Condensed',sans-serif",
+                 fontSize:15, fontWeight:500, padding:'7px 10px', outline:'none' }}
+        onFocus={e => e.target.style.borderColor = E.orange}
+        onBlur={e  => e.target.style.borderColor = E.border}/>
+    </div>
+  );
+}
+
+const Sec = ({c}) => (
+  <div style={{ fontFamily:"'Bebas Neue',sans-serif", fontSize:13, letterSpacing:3,
+                color:E.orange, paddingBottom:8,
+                borderBottom:`1px solid rgba(255,107,0,0.20)` }}>{c}</div>
+);
+
+/* ─── form panels ───────────────────────────────────────────── */
+function SharedForm({ info, set }) {
+  return (
+    <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+      <Sec c="Dati Torneo"/>
+      <Inp label="Nome torneo" value={info.tournamentName} onChange={v=>set('tournamentName',v)}/>
+      <div style={{ display:'grid', gridTemplateColumns:'3fr 2fr', gap:8 }}>
+        <Inp label="Edizione" value={info.edition}   onChange={v=>set('edition',v)}/>
+        <Inp label="N° Cup"   value={info.cupNumber} onChange={v=>set('cupNumber',v)}/>
+      </div>
+      <Inp label="Data evento" value={info.eventDate} onChange={v=>set('eventDate',v)}/>
+      <div style={{ display:'grid', gridTemplateColumns:'2fr 1fr', gap:8 }}>
+        <Inp label="Handle (@)" value={info.handle}      onChange={v=>set('handle',v)}/>
+        <Inp label="Giocatori"  value={info.playerCount} onChange={v=>set('playerCount',v)}
+             type="number" min={2} max={512}/>
+      </div>
+    </div>
+  );
+}
+
+function CoverForm({ img, setImg }) {
+  return (
+    <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+      <Sec c="Copertina"/>
+      <Lbl c="Sfondo opzionale"/>
+      <ImageUploadSlot value={img} onChange={setImg} fullWidth height={110} radius={6}
+                       label="Trascina un'immagine di sfondo"/>
+    </div>
+  );
+}
+
+function DecklistForm({ decks, setDecks, idx, setIdx }) {
+  const active = decks[idx] || {};
+  const upd = (field, val) => {
+    const n = [...decks]; n[idx] = { ...n[idx], [field]:val }; setDecks(n);
+  };
+  const add = () => {
+    setDecks([...decks, {winnerName:"Giocatore",leaderName:"Leader",image:null}]);
+    setIdx(decks.length);
+  };
+  const del = (i, e) => {
+    e.stopPropagation();
+    const n = decks.filter((_,j)=>j!==i);
+    const safe = n.length ? n : [{winnerName:"Giocatore",leaderName:"Leader",image:null}];
+    setDecks(safe);
+    setIdx(Math.min(idx, safe.length-1));
+  };
+
+  return (
+    <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+      <Sec c="Decklist"/>
+
+      {/* Mini-tabs slide */}
+      <div style={{ display:'flex', flexWrap:'wrap', gap:5, alignItems:'center' }}>
+        {decks.map((_,i) => (
+          <button key={i} onClick={()=>setIdx(i)}
+            style={{
+              display:'flex', alignItems:'center', gap:5, padding:'4px 10px',
+              background: idx===i ? E.orange : 'transparent',
+              border:`1px solid ${idx===i ? E.orange : E.border}`,
+              borderRadius:4, cursor:'pointer',
+              color: idx===i ? '#000' : E.dim,
+              fontFamily:"'Barlow Condensed',sans-serif",
+              fontSize:13, fontWeight:600,
+            }}>
+            Slide {i+1}
+            {decks.length > 1 && (
+              <span onClick={e=>del(i,e)}
+                    style={{ fontWeight:700, lineHeight:1,
+                             color: idx===i ? 'rgba(0,0,0,0.5)' : E.red }}>×</span>
+            )}
+          </button>
+        ))}
+        <button onClick={add}
+          style={{ padding:'4px 10px', background:'transparent', cursor:'pointer',
+                   border:`1px dashed rgba(255,107,0,0.38)`, borderRadius:4,
+                   color:E.orange, fontFamily:"'Barlow Condensed',sans-serif",
+                   fontSize:13, fontWeight:600 }}>+</button>
+      </div>
+
+      {/* Campi slide attiva */}
+      <div style={{ padding:10, background:E.card, borderRadius:6,
+                    border:`1px solid rgba(255,107,0,0.15)`,
+                    display:'flex', flexDirection:'column', gap:8 }}>
+        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
+          <Inp label="Vincitore" value={active.winnerName||''} onChange={v=>upd('winnerName',v)}/>
+          <Inp label="Leader"    value={active.leaderName||''} onChange={v=>upd('leaderName',v)}/>
+        </div>
+        <Lbl c="Immagine Decklist"/>
+        <ImageUploadSlot value={active.image||null} onChange={img=>upd('image',img)}
+                         fullWidth height={130} radius={6}
+                         label="Trascina l'immagine (es. screenshot da deck builder)"/>
+      </div>
+    </div>
+  );
+}
+
+/* ─── PkmnSearch ────────────────────────────────────────────── */
+const spriteUrl = n => window.pkmnSpriteUrl(n);
+const prettyPkmn = n => n.split('-').map(s => s.charAt(0).toUpperCase() + s.slice(1)).join(' ');
+
+function PkmnSearch({ value, onChange, role='main', title }) {
+  const [open, setOpen] = useState(false);
+  const [q, setQ]       = useState('');
+  const inputRef        = useRef(null);
+  const sz = role==='main' ? 44 : 32;
+  const results = q.length >= 1
+    ? window.POKEMON_LIST.filter(p => p.includes(q.toLowerCase().trim().replace(/ /g,'-'))).slice(0,30)
+    : [];
+
+  return (
+    <>
+      {/* Trigger */}
+      <div onClick={()=>setOpen(true)} title={value||'Scegli Pokémon'}
+           style={{ width:sz, height:sz, borderRadius:5, flexShrink:0, cursor:'pointer',
+                    border:`1.5px ${value?'solid':'dashed'} ${value?E.orange:E.border}`,
+                    background:E.input, overflow:'hidden',
+                    display:'flex', alignItems:'center', justifyContent:'center',
+                    position:'relative', transition:'border-color .15s' }}>
+        {value
+          ? <img src={spriteUrl(value)} style={{width:'100%',height:'100%',objectFit:'contain'}} alt={value}/>
+          : <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+              <circle cx="7" cy="7" r="6" stroke="rgba(255,107,0,0.5)" strokeWidth="1.2"/>
+              <line x1="7" y1="3" x2="7" y2="11" stroke="rgba(255,107,0,0.5)" strokeWidth="1.6" strokeLinecap="round"/>
+              <line x1="3" y1="7" x2="11" y2="7" stroke="rgba(255,107,0,0.5)" strokeWidth="1.6" strokeLinecap="round"/>
+            </svg>
+        }
+      </div>
+
+      {/* Modal */}
+      {open && (
+        <div onClick={()=>{setOpen(false);setQ('');}}
+             style={{ position:'fixed', inset:0, zIndex:3000,
+                      background:'rgba(0,0,0,0.82)',
+                      display:'flex', alignItems:'center', justifyContent:'center' }}>
+          <div onClick={ev=>ev.stopPropagation()}
+               style={{ width:490, maxHeight:530, background:'#1a1a1a',
+                        borderRadius:10, border:`1.5px solid rgba(255,107,0,0.38)`,
+                        boxShadow:'0 24px 70px rgba(0,0,0,0.75)',
+                        display:'flex', flexDirection:'column', overflow:'hidden' }}>
+
+            {/* header */}
+            <div style={{ padding:'12px 16px 10px',
+                          borderBottom:`1px solid rgba(255,107,0,0.12)` }}>
+              <div style={{ fontFamily:"'Bebas Neue',sans-serif", fontSize:15,
+                            letterSpacing:2.5, color:E.orange, marginBottom:8 }}>
+                {title || (role==='main' ? 'Pokémon principale' : 'Pokémon secondario (opzionale)')}
+              </div>
+              <input ref={inputRef} autoFocus value={q} onChange={ev=>setQ(ev.target.value)}
+                     placeholder="Cerca… es. Charizard, Iron Hands, Miraidon"
+                     style={{ width:'100%', background:E.input,
+                              border:`1px solid ${E.border}`, borderRadius:5,
+                              color:E.white, fontFamily:"'Barlow Condensed',sans-serif",
+                              fontSize:15, padding:'8px 12px', outline:'none' }}
+                     onFocus={ev=>ev.target.style.borderColor=E.orange}
+                     onBlur={ev=>ev.target.style.borderColor=E.border}/>
+            </div>
+
+            {/* grid */}
+            <div style={{ flex:1, overflowY:'auto', padding:10,
+                          display:'grid', gridTemplateColumns:'repeat(6,1fr)', gap:5 }}>
+              {results.length > 0 ? results.map(name => {
+                const sel = value===name;
+                return (
+                  <div key={name}
+                       onClick={()=>{onChange(name);setOpen(false);setQ('');}}
+                       style={{ display:'flex', flexDirection:'column', alignItems:'center',
+                                gap:2, padding:'5px 2px', borderRadius:5, cursor:'pointer',
+                                background: sel?'rgba(255,107,0,0.18)':'transparent',
+                                border:`1px solid ${sel?E.orange:'transparent'}`,
+                                transition:'background .1s' }}
+                       onMouseEnter={ev=>{if(!sel)ev.currentTarget.style.background='rgba(255,107,0,0.07)';}}
+                       onMouseLeave={ev=>{if(!sel)ev.currentTarget.style.background='transparent';}}>
+                    <img src={spriteUrl(name)} width={48} height={48}
+                         style={{objectFit:'contain'}} alt={name}/>
+                    <span style={{ fontFamily:"'Barlow Condensed',sans-serif",
+                                   fontSize:9, color:E.dim, textAlign:'center',
+                                   lineHeight:1.2, wordBreak:'break-word' }}>
+                      {prettyPkmn(name)}
+                    </span>
+                  </div>
+                );
+              }) : (
+                <div style={{ gridColumn:'1/-1', padding:'32px 0', textAlign:'center',
+                               fontFamily:"'Barlow Condensed',sans-serif",
+                               fontSize:14, color:E.dimmer, letterSpacing:0.5 }}>
+                  {q.length===0 ? 'Digita per cercare un Pokémon…' : 'Nessun risultato'}
+                </div>
+              )}
+            </div>
+
+            {/* footer */}
+            <div style={{ padding:'8px 14px', borderTop:`1px solid rgba(255,107,0,0.10)`,
+                          display:'flex', gap:8, justifyContent:'flex-end' }}>
+              {value && (
+                <button onClick={()=>{onChange(null);setOpen(false);setQ('');}}
+                  style={{ padding:'5px 14px', background:'rgba(201,43,12,0.14)',
+                           border:'1px solid rgba(201,43,12,0.40)', borderRadius:4,
+                           color:E.red, fontFamily:"'Barlow Condensed',sans-serif",
+                           fontSize:13, cursor:'pointer' }}>Rimuovi</button>
+              )}
+              <button onClick={()=>{setOpen(false);setQ('');}}
+                style={{ padding:'5px 14px', background:'transparent',
+                         border:`1px solid ${E.border}`, borderRadius:4,
+                         color:E.dim, fontFamily:"'Barlow Condensed',sans-serif",
+                         fontSize:13, cursor:'pointer' }}>Chiudi</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+function BrkRow({ e, i, upd, del }) {
+  return (
+    <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+      <PkmnSearch value={e.mainPkmn}      onChange={v=>upd(i,{...e,mainPkmn:v})}      role="main"/>
+      <PkmnSearch value={e.secondaryPkmn} onChange={v=>upd(i,{...e,secondaryPkmn:v})} role="sec"/>
+      <input value={e.name} onChange={ev=>upd(i,{...e,name:ev.target.value})}
+             placeholder="Nome leader"
+             style={{ flex:1, background:E.input, border:`1px solid ${E.border}`,
+                      borderRadius:3, color:E.white, fontSize:14,
+                      fontFamily:"'Barlow Condensed',sans-serif",
+                      fontWeight:500, padding:'5px 8px', outline:'none' }}
+             onFocus={ev=>ev.target.style.borderColor=E.orange}
+             onBlur={ev=>ev.target.style.borderColor=E.border}/>
+      <input type="number" min="1" max="99" value={e.value}
+             onChange={ev=>upd(i,{...e,value:Math.max(1,Number(ev.target.value))})}
+             style={{ width:46, background:E.input, border:`1px solid ${E.border}`,
+                      borderRadius:3, color:E.orange, fontSize:16,
+                      fontFamily:"'Bebas Neue',sans-serif",
+                      padding:'5px 4px', textAlign:'center', outline:'none' }}
+             onFocus={ev=>ev.target.style.borderColor=E.orange}
+             onBlur={ev=>ev.target.style.borderColor=E.border}/>
+      <button onClick={()=>del(i)}
+              style={{ width:22, height:22, borderRadius:'50%', flexShrink:0,
+                       background:'rgba(201,43,12,0.14)',
+                       border:'1px solid rgba(201,43,12,0.40)',
+                       color:E.red, fontSize:13, cursor:'pointer',
+                       display:'flex', alignItems:'center', justifyContent:'center' }}>×</button>
+    </div>
+  );
+}
+
+function BreakdownForm({ brk, setBrk }) {
+  const upd = (i,v) => { const n=[...brk]; n[i]=v; setBrk(n); };
+  const del = i => setBrk(brk.filter((_,j)=>j!==i));
+  const add = () => setBrk([...brk,{name:"Nuovo Leader",value:1,mainPkmn:null,secondaryPkmn:null}]);
+  return (
+    <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+      <Sec c="Mazzi Giocati"/>
+      <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+        {brk.map((e,i) => <BrkRow key={i} e={e} i={i} upd={upd} del={del}/>)}
+      </div>
+      <button onClick={add}
+        style={{ marginTop:4, width:'100%', padding:'8px 0',
+                 background:'rgba(255,107,0,0.07)',
+                 border:`1px dashed rgba(255,107,0,0.38)`, borderRadius:4,
+                 color:E.orange, fontFamily:"'Barlow Condensed',sans-serif",
+                 fontSize:14, fontWeight:600, letterSpacing:1, cursor:'pointer' }}>
+        + Aggiungi Leader
+      </button>
+    </div>
+  );
+}
+
+/* ─── preview ───────────────────────────────────────────────── */
+function RegionalForm({ info, set }) {
+  return (
+    <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+      <Sec c="Dati Regional"/>
+      <Inp label="Nome regional" value={info.regionalName} onChange={v=>set('regionalName',v)}/>
+      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
+        <Inp label="Data"       value={info.regionalDate} onChange={v=>set('regionalDate',v)}/>
+        <Inp label="Handle (@)" value={info.handle}       onChange={v=>set('handle',v)}/>
+      </div>
+    </div>
+  );
+}
+
+function CatSelect({ value, onChange }) {
+  return (
+    <div style={{ display:'flex', gap:3 }}>
+      {CATS.map(c => (
+        <button key={c} onClick={()=>onChange(c)}
+          style={{ padding:'5px 7px', borderRadius:3, cursor:'pointer',
+                   background: value===c ? CATEGORY_COLORS[c] : 'transparent',
+                   border:`1px solid ${value===c ? CATEGORY_COLORS[c] : E.border}`,
+                   color: value===c ? '#000' : E.dim,
+                   fontFamily:"'Barlow Condensed',sans-serif", fontSize:12, fontWeight:700 }}>
+          {c[0]}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function RosterForm({ roster, setRoster, photo, setPhoto }) {
+  const upd = (i,v) => { const n=[...roster]; n[i]={...n[i],...v}; setRoster(n); };
+  return (
+    <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+      <Sec c="Roster giocatori"/>
+      <Lbl c="Foto di gruppo"/>
+      <ImageUploadSlot value={photo} onChange={setPhoto} fullWidth height={110} radius={6}
+                       label="Trascina la foto con tutti i giocatori"/>
+      <div style={{ fontFamily:"'Barlow Condensed',sans-serif", fontSize:12, color:E.dimmer }}>
+        J = Junior · S = Senior · M = Master
+      </div>
+      {roster.map((p,i) => (
+        <div key={i} style={{ display:'flex', alignItems:'center', gap:6 }}>
+          <input value={p.name} onChange={ev=>upd(i,{name:ev.target.value})} placeholder="Nome giocatore"
+            style={{ flex:1, minWidth:0, background:E.input, border:`1px solid ${E.border}`, borderRadius:3,
+                     color:E.white, fontSize:14, fontFamily:"'Barlow Condensed',sans-serif",
+                     fontWeight:500, padding:'5px 8px', outline:'none' }}/>
+          <GameSelect value={p.game} onChange={g=>upd(i,{game:g})}/>
+          <CatSelect value={p.category} onChange={c=>upd(i,{category:c})}/>
+          <button onClick={()=>setRoster(roster.filter((_,j)=>j!==i))}
+            style={{ width:22, height:22, borderRadius:'50%', flexShrink:0, background:'rgba(201,43,12,0.14)',
+                     border:'1px solid rgba(201,43,12,0.40)', color:E.red, fontSize:13, cursor:'pointer' }}>×</button>
+        </div>
+      ))}
+      <button onClick={()=>setRoster([...roster,{name:"",category:"Master",game:"TCG"}])}
+        style={{ marginTop:4, width:'100%', padding:'8px 0', background:'rgba(255,107,0,0.07)',
+                 border:`1px dashed rgba(255,107,0,0.38)`, borderRadius:4, color:E.orange,
+                 fontFamily:"'Barlow Condensed',sans-serif", fontSize:14, fontWeight:600, cursor:'pointer' }}>
+        + Aggiungi giocatore
+      </button>
+    </div>
+  );
+}
+
+function PlayerForm({ results, setResults, idx, setIdx, roster }) {
+  const p = results[idx] || newResult();
+  const upd = v => { const n=[...results]; n[idx]={...n[idx],...v}; setResults(n); };
+  const add = () => { setResults([...results,newResult()]); setIdx(results.length); };
+  const del = (i,e) => {
+    e.stopPropagation();
+    const n = results.filter((_,j)=>j!==i);
+    const safe = n.length ? n : [newResult()];
+    setResults(safe); setIdx(Math.min(idx,safe.length-1));
+  };
+  const named = roster.filter(r=>r.name);
+  return (
+    <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+      <Sec c="Risultato giocatore"/>
+      <div style={{ display:'flex', flexWrap:'wrap', gap:5 }}>
+        {results.map((_,i) => (
+          <button key={i} onClick={()=>setIdx(i)}
+            style={{ display:'flex', alignItems:'center', gap:5, padding:'4px 10px', borderRadius:4, cursor:'pointer',
+                     background: idx===i ? E.orange : 'transparent',
+                     border:`1px solid ${idx===i ? E.orange : E.border}`,
+                     color: idx===i ? '#000' : E.dim,
+                     fontFamily:"'Barlow Condensed',sans-serif", fontSize:13, fontWeight:600 }}>
+            Slide {i+1}
+            {results.length>1 && <span onClick={e=>del(i,e)} style={{ fontWeight:700, color: idx===i?'rgba(0,0,0,0.5)':E.red }}>×</span>}
+          </button>
+        ))}
+        <button onClick={add}
+          style={{ padding:'4px 10px', background:'transparent', cursor:'pointer',
+                   border:`1px dashed rgba(255,107,0,0.38)`, borderRadius:4, color:E.orange,
+                   fontFamily:"'Barlow Condensed',sans-serif", fontSize:13, fontWeight:600 }}>+</button>
+      </div>
+      <div style={{ padding:10, background:E.card, borderRadius:6, border:`1px solid rgba(255,107,0,0.15)`,
+                    display:'flex', flexDirection:'column', gap:8 }}>
+        {named.length > 0 && (
+          <div>
+            <Lbl c="Scegli dal roster"/>
+            <select value="" onChange={ev=>{ const r=named[Number(ev.target.value)]; if(r) upd({name:r.name,category:r.category,game:r.game||'TCG'}); }}
+              style={{ width:'100%', background:E.input, border:`1px solid ${E.border}`, borderRadius:4,
+                       color:E.white, fontFamily:"'Barlow Condensed',sans-serif", fontSize:15, padding:'7px 8px' }}>
+              <option value="">— seleziona —</option>
+              {named.map((r,i)=><option key={i} value={i}>{r.name} ({r.game||'TCG'} · {r.category})</option>)}
+            </select>
+          </div>
+        )}
+        <Inp label="Nome" value={p.name} onChange={v=>upd({name:v})}/>
+        <div>
+          <Lbl c="Gioco e categoria"/>
+          <div style={{ display:'flex', gap:8 }}>
+            <GameSelect value={p.game} onChange={g=>upd({game:g})}/>
+            <CatSelect value={p.category} onChange={c=>upd({category:c})}/>
+          </div>
+        </div>
+        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
+          <Inp label="Risultato" value={p.result} onChange={v=>upd({result:v})}/>
+          <Inp label="Record (opz.)" value={p.record} onChange={v=>upd({record:v})}/>
+        </div>
+        <div>
+          <Lbl c={(p.game||'TCG')==='VGC' ? 'Team (6 Pokémon)' : 'Deck (2 Pokémon)'}/>
+          <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
+            {Array.from({length:(p.game||'TCG')==='VGC'?6:2}).map((_,k) => (
+              <PkmnSearch key={k} role="main" title={`Pokémon ${k+1}`}
+                value={(p.pokemon||[])[k]||null}
+                onChange={v=>{ const arr=[...(p.pokemon||[])]; arr[k]=v; upd({pokemon:arr}); }}/>
+            ))}
+          </div>
+        </div>
+        <Lbl c="Foto giocatore"/>
+        <ImageUploadSlot value={p.photo} onChange={img=>upd({photo:img})} fullWidth height={130} radius={6}
+                         label="Trascina la foto del giocatore"/>
+      </div>
+    </div>
+  );
+}
+
+const PREV = 474; const SC = PREV / 1080;
+
+function Preview({ tab, tweaks, images, data, deckCount, deckIdx, setDeckIdx, extra }) {
+  const { DecklistTemplate, BreakdownTemplate, CoverTemplate } = window;
+  return (
+    <div style={{ flex:1, display:'flex', flexDirection:'column',
+                  alignItems:'center', justifyContent:'center', gap:12,
+                  background:E.panel,
+                  backgroundImage:'radial-gradient(rgba(255,107,0,0.035) 1px, transparent 1px)',
+                  backgroundSize:'30px 30px' }}>
+      {/* Template scalato */}
+      <div style={{ width:PREV, height:PREV, overflow:'hidden', borderRadius:8, flexShrink:0,
+                    border:`2px solid rgba(255,107,0,0.32)`,
+                    boxShadow:`0 0 60px rgba(255,107,0,0.09), 0 20px 60px rgba(0,0,0,0.5)`,
+                    position:'relative' }}>
+        <div style={{ width:1080, height:1080, transform:`scale(${SC})`,
+                      transformOrigin:'top left', position:'absolute', top:0, left:0 }}>
+          {tab==='cover'     && <CoverTemplate     tweaks={tweaks} images={images}/>}
+          {tab==='decklist'  && <DecklistTemplate  tweaks={tweaks} images={images}/>}
+          {tab==='breakdown' && <BreakdownTemplate tweaks={tweaks} images={images} data={data}/>}
+          {extra}
+        </div>
+      </div>
+
+      {/* Navigazione slide decklist */}
+      {deckCount > 1 && (
+        <div style={{ display:'flex', alignItems:'center', gap:14 }}>
+          <button onClick={()=>setDeckIdx(Math.max(0,deckIdx-1))} disabled={deckIdx===0}
+            style={{ width:32, height:32, borderRadius:'50%',
+                     border:`1px solid ${E.border}`, background:'transparent',
+                     color:E.white, fontSize:20, cursor:'pointer',
+                     display:'flex', alignItems:'center', justifyContent:'center',
+                     opacity:deckIdx===0?0.28:1 }}>‹</button>
+          <span style={{ fontFamily:"'Barlow Condensed',sans-serif",
+                         fontSize:15, color:E.dim, letterSpacing:1 }}>
+            Slide {deckIdx+1} / {deckCount}
+          </span>
+          <button onClick={()=>setDeckIdx(Math.min(deckCount-1,deckIdx+1))}
+                  disabled={deckIdx===deckCount-1}
+            style={{ width:32, height:32, borderRadius:'50%',
+                     border:`1px solid ${E.border}`, background:'transparent',
+                     color:E.white, fontSize:20, cursor:'pointer',
+                     display:'flex', alignItems:'center', justifyContent:'center',
+                     opacity:deckIdx===deckCount-1?0.28:1 }}>›</button>
+        </div>
+      )}
+
+      <div style={{ fontFamily:"'Barlow Condensed',sans-serif", fontSize:13,
+                    color:E.dimmer, letterSpacing:1 }}>
+        1080 × 1080 px · Instagram Square
+      </div>
+    </div>
+  );
+}
+
+/* ─── App ───────────────────────────────────────────────────── */
+/* ─── font embedding per export ─── */
+const GF_URL = document.querySelector('link[href*="fonts.googleapis.com/css2"]').href;
+let _fontCSSCache = null;
+async function buildFontCSS() {
+  if (_fontCSSCache) return _fontCSSCache;
+  const css = await fetch(GF_URL).then(r => r.text());
+  // tieni solo i subset latin / latin-ext
+  const blocks = css.split(/(?=\/\*\s*[\w-]+\s*\*\/)/)
+    .filter(b => /\/\*\s*(latin|latin-ext)\s*\*\//.test(b));
+  let out = blocks.join('\n');
+  const urls = [...new Set([...out.matchAll(/url\((https:[^)]+)\)/g)].map(m => m[1]))];
+  await Promise.all(urls.map(async u => {
+    const blob = await fetch(u).then(r => r.blob());
+    const data = await new Promise(res => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.readAsDataURL(blob); });
+    out = out.split(u).join(data);
+  }));
+  _fontCSSCache = out;
+  return out;
+}
+
+function App() {
+  const [tab, setTab]     = useState('cover');
+  const [mode, setMode]   = useState('torneo');
+  const [roster, setRoster]   = useState(DEFAULT_ROSTER.map(p=>({...p})));
+  const [rosterPhoto, setRosterPhoto] = useState(null);
+  const [results, setResults] = useState([newResult()]);
+  const [resIdx, setResIdx]   = useState(0);
+  const switchMode = m => { setMode(m); setTab(m==='torneo' ? 'cover' : 'roster'); };
+  const [info, setRaw]    = useState({
+    tournamentName:"cicciogamer89tcg Cup", edition:"OP-09",
+    eventDate:"23 Maggio 2026",           cupNumber:"1",
+    playerCount:32,                       handle:"cicciogamer89tcg_genova",
+    regionalName:"Regional Città",        regionalDate:"DD Month YYYY",
+  });
+  const set = (k,v) => setRaw(p=>({...p,[k]:v}));
+
+  const [coverImg, setCoverImg] = useState(null);
+  const [decks, setDecks]       = useState([
+    {winnerName:"Giocatore",leaderName:"Leader",image:null}
+  ]);
+  const [deckIdx, setDeckIdx]   = useState(0);
+  const [brk, setBrk]           = useState(DEFAULT_BRK);
+  const [busy, setBusy]         = useState(false);
+  const [status, setStatus]     = useState('');
+
+  const tweaks   = { ...info };
+  const brkData  = brk.map(b=>({name:b.name, value:Number(b.value),
+                                mainPkmn:b.mainPkmn||null, secondaryPkmn:b.secondaryPkmn||null}));
+  const activeDk = decks[deckIdx] || decks[0] || {};
+
+  const previewTweaks = tab==='decklist'
+    ? {...tweaks, winnerName:activeDk.winnerName, leaderName:activeDk.leaderName}
+    : tweaks;
+
+  const previewImages = {
+    cover:     { cover:  coverImg },
+    decklist:  { deck:   activeDk.image },
+    breakdown: {},
+  }[tab];
+
+  /* ── scarica tutto ── */
+  async function downloadAll() {
+    if (!window.htmlToImage?.toPng) {
+      alert('Libreria export non caricata. Ricarica la pagina e riprova.');
+      return;
+    }
+    setBusy(true);
+    const { toPng } = window.htmlToImage;
+    setStatus('Preparo i font…');
+    await document.fonts.ready;
+    let fontEmbedCSS = '';
+    try { fontEmbedCSS = await buildFontCSS(); }
+    catch(e) { console.warn('Font embed failed', e); }
+    const pfx = info.tournamentName.replace(/[^a-zA-Z0-9]/g,'_');
+    const rpfx = info.regionalName.replace(/[^a-zA-Z0-9]/g,'_');
+    const slides = mode==='torneo' ? [
+      {id:'ex-cover',     name:`${pfx}_01_copertina`},
+      ...decks.map((_,i)=>({id:`ex-deck-${i}`, name:`${pfx}_${String(i+2).padStart(2,'0')}_decklist_${i+1}`})),
+      {id:'ex-brk',       name:`${pfx}_${String(decks.length+2).padStart(2,'0')}_breakdown`},
+    ] : [
+      {id:'ex-roster', name:`${rpfx}_01_roster`},
+      ...results.map((r,i)=>({id:`ex-res-${i}`, name:`${rpfx}_${String(i+2).padStart(2,'0')}_${(r.name||'giocatore').replace(/[^a-zA-Z0-9]/g,'_')}`})),
+    ];
+    for (const s of slides) {
+      const el = document.getElementById(s.id);
+      if (!el) continue;
+      setStatus(`Esportando ${s.name}…`);
+      try {
+        const opts = { pixelRatio:1, cacheBust:true, width:1080, height:1080,
+                       ...(fontEmbedCSS ? { fontEmbedCSS } : {}) };
+        await toPng(el, opts);                                // warm-up
+        const url = await toPng(el, opts);
+        const a = document.createElement('a');
+        a.href=url; a.download=`${s.name}.png`;
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        await new Promise(r=>setTimeout(r,700));
+      } catch(e) { console.warn('Export failed:',s.id,e); }
+    }
+    setStatus(''); setBusy(false);
+  }
+
+  return (
+    <div style={{ display:'flex', flexDirection:'column', height:'100vh' }}>
+
+      {/* ── header ── */}
+      <div style={{ height:52, flexShrink:0, display:'flex', alignItems:'center',
+                    padding:'0 18px', gap:12, background:E.card,
+                    borderBottom:`2.5px solid ${E.orange}` }}>
+        <img src="uploads/WhatsApp Image 2026-05-23 at 16.50.59-5ab94ae2.jpeg"
+             style={{ width:38, height:38, borderRadius:6, objectFit:'cover' }} alt=""/>
+        <span style={{ fontFamily:"'Bebas Neue',sans-serif", fontSize:21, letterSpacing:3 }}>
+          cicciogamer89tcg Cup
+        </span>
+        <span style={{ fontFamily:"'Barlow Condensed',sans-serif",
+                       fontSize:14, color:E.orange, letterSpacing:1 }}>— Editor Post</span>
+        <a href="Tournament Templates.html"
+           style={{ marginLeft:'auto', fontFamily:"'Barlow Condensed',sans-serif",
+                    fontSize:13, color:E.dim, letterSpacing:1, textDecoration:'none' }}>
+          Design canvas →
+        </a>
+      </div>
+
+      <div style={{ flex:1, display:'flex', overflow:'hidden' }}>
+
+        {/* ── left panel ── */}
+        <div style={{ width:368, flexShrink:0, display:'flex', flexDirection:'column',
+                      background:E.card, borderRight:`1px solid rgba(255,107,0,0.14)`,
+                      overflow:'hidden' }}>
+
+          {/* tab bar */}
+          <div style={{ display:'flex', flexShrink:0,
+                        borderBottom:`1px solid rgba(255,107,0,0.16)` }}>
+            {(mode==='torneo' ? TABS_T : TABS_R).map(t => (
+              <button key={t.id} onClick={()=>setTab(t.id)}
+                style={{
+                  flex:1, padding:'11px 4px', cursor:'pointer',
+                  background: tab===t.id ? 'rgba(255,107,0,0.09)' : 'transparent',
+                  border:'none',
+                  borderBottom: tab===t.id ? `2.5px solid ${E.orange}` : '2.5px solid transparent',
+                  color: tab===t.id ? E.orange : E.dim,
+                  fontFamily:"'Barlow Condensed',sans-serif",
+                  fontSize:13, fontWeight:600, letterSpacing:1.5,
+                  textTransform:'uppercase', marginBottom:-1,
+                }}>{t.label}</button>
+            ))}
+          </div>
+
+          {/* form scroller */}
+          <div style={{ flex:1, overflowY:'auto', padding:'16px 14px',
+                        display:'flex', flexDirection:'column', gap:18 }}>
+            <div style={{ display:'flex', gap:4, padding:3, background:E.input, borderRadius:6,
+                          border:`1px solid ${E.border}` }}>
+              {[['torneo','Torneo'],['regional','Regional']].map(([id,l]) => (
+                <button key={id} onClick={()=>switchMode(id)}
+                  style={{ flex:1, padding:'7px 0', borderRadius:4, border:'none', cursor:'pointer',
+                           background: mode===id ? E.orange : 'transparent',
+                           color: mode===id ? '#000' : E.dim,
+                           fontFamily:"'Bebas Neue',sans-serif", fontSize:15, letterSpacing:2 }}>{l}</button>
+              ))}
+            </div>
+            {mode==='torneo' ? <SharedForm info={info} set={set}/> : <RegionalForm info={info} set={set}/>}
+            {tab==='roster'    && <RosterForm roster={roster} setRoster={setRoster}
+                                              photo={rosterPhoto} setPhoto={setRosterPhoto}/>}
+            {tab==='player'    && <PlayerForm results={results} setResults={setResults}
+                                              idx={resIdx} setIdx={setResIdx} roster={roster}/>}
+            {tab==='cover'     && <CoverForm     img={coverImg} setImg={setCoverImg}/>}
+            {tab==='decklist'  && <DecklistForm  decks={decks} setDecks={setDecks}
+                                                 idx={deckIdx} setIdx={setDeckIdx}/>}
+            {tab==='breakdown' && <BreakdownForm brk={brk} setBrk={setBrk}/>}
+          </div>
+
+          {/* ── download footer ── */}
+          <div style={{ flexShrink:0, padding:'12px 14px',
+                        borderTop:`1px solid rgba(255,107,0,0.14)` }}>
+            {status && (
+              <div style={{ fontFamily:"'Barlow Condensed',sans-serif",
+                             fontSize:12, color:E.dim, marginBottom:6,
+                             letterSpacing:0.5, whiteSpace:'nowrap',
+                             overflow:'hidden', textOverflow:'ellipsis' }}>
+                {status}
+              </div>
+            )}
+            <button onClick={downloadAll} disabled={busy}
+              style={{
+                width:'100%', padding:'11px 0',
+                background: busy ? 'rgba(255,107,0,0.18)' : E.orange,
+                border:'none', borderRadius:6,
+                color: busy ? E.dim : '#000',
+                fontFamily:"'Bebas Neue',sans-serif",
+                fontSize:17, letterSpacing:2.5,
+                cursor: busy ? 'wait' : 'pointer',
+                transition:'background .2s',
+              }}>
+              {busy ? 'GENERANDO PNG…' : '⬇  SCARICA TUTTO  (PNG)'}
+            </button>
+            <div style={{ marginTop:6, fontFamily:"'Barlow Condensed',sans-serif",
+                          fontSize:11, color:E.dimmer, textAlign:'center',
+                          letterSpacing:0.5 }}>
+              {mode==='torneo'
+                ? `1 Copertina · ${decks.length} Decklist · 1 Breakdown`
+                : `1 Roster · ${results.length} Risultati`}
+            </div>
+          </div>
+        </div>
+
+        {/* ── preview ── */}
+        <Preview tab={tab} tweaks={previewTweaks}
+                 images={previewImages} data={brkData}
+                 deckCount={tab==='decklist' ? decks.length : tab==='player' ? results.length : 0}
+                 deckIdx={tab==='player' ? resIdx : deckIdx}
+                 setDeckIdx={tab==='player' ? setResIdx : setDeckIdx}
+                 extra={tab==='roster' ? <RosterTemplate tweaks={info} players={roster.filter(p=>p.name)} photo={rosterPhoto}/>
+                      : tab==='player' ? <PlayerResultTemplate tweaks={info} player={results[resIdx]}/>
+                      : null}/>
+      </div>
+
+      {/* ── export containers (off-screen, full size) ── */}
+      <div style={{ position:'fixed', left:'-9999px', top:0,
+                    pointerEvents:'none', zIndex:-1 }}>
+        <div id="ex-cover" style={{ width:1080, height:1080 }}>
+          <CoverTemplate tweaks={tweaks} images={{ cover:coverImg }}/>
+        </div>
+        {decks.map((d,i) => (
+          <div key={i} id={`ex-deck-${i}`} style={{ width:1080, height:1080 }}>
+            <DecklistTemplate
+              tweaks={{ ...tweaks, winnerName:d.winnerName, leaderName:d.leaderName }}
+              images={{ deck:d.image }}/>
+          </div>
+        ))}
+        <div id="ex-roster" style={{ width:1080, height:1080 }}>
+          <RosterTemplate tweaks={info} players={roster.filter(p=>p.name)} photo={rosterPhoto}/>
+        </div>
+        {results.map((r,i) => (
+          <div key={i} id={`ex-res-${i}`} style={{ width:1080, height:1080 }}>
+            <PlayerResultTemplate tweaks={info} player={r}/>
+          </div>
+        ))}
+        <div id="ex-brk" style={{ width:1080, height:1080 }}>
+          <BreakdownTemplate tweaks={tweaks}
+                             images={{}}
+                             data={brkData}/>
+        </div>
+      </div>
+
+    </div>
+  );
+}
+
+window.pokemonReady.then(() => ReactDOM.createRoot(document.getElementById('root')).render(<App/>));
+</script>
+</body>
+</html>
