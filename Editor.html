@@ -87,8 +87,12 @@ const DEFAULT_BRK = [
 function ImageUploadSlot({ value, onChange, width=46, height=64, label="immagine", radius=4, fullWidth=false }) {
   const ref = useRef(null);
   const [drag, setDrag] = useState(false);
-  const handle = f => { if (f?.type.startsWith('image/')) onChange(URL.createObjectURL(f)); };
-  return (
+  const handle = f => {
+  if (!f?.type.startsWith('image/')) return;
+  const fr = new FileReader();
+  fr.onload = () => onChange(fr.result);
+  fr.readAsDataURL(f);
+}; return (
     <div
       onClick={() => ref.current?.click()}
       onDragOver={e => { e.preventDefault(); setDrag(true); }}
@@ -708,7 +712,7 @@ function App() {
       if (!el) continue;
       setStatus(`Esportando ${s.name}…`);
       try {
-        const opts = { pixelRatio:1, cacheBust:true, width:1080, height:1080,
+        const opts = { pixelRatio:1, cacheBust:false, width:1080, height:1080,
                        ...(fontEmbedCSS ? { fontEmbedCSS } : {}) };
         await toPng(el, opts);                                // warm-up
         const url = await toPng(el, opts);
